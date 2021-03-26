@@ -1,0 +1,20 @@
+{
+  "name": "realm-node",
+  "version": "1.0.0",
+  "description": "Node.js client for MongoDB Realm API",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Massimiliano Marcon <max.marcon@mongodb.com>",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "dotenv": "^8.2.0",
+    "node-fetch": "^2.6.1",
+    "pino": "^6.11.2"
+  },
+  "devDependencies": {
+    "pino-pretty": "^4.7.1",
+    "semistandard": "^16.0.0"
+  }
+}
