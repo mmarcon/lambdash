@@ -1,7 +1,7 @@
 {
-  "name": "realm-node",
+  "name": "lambdash",
   "version": "1.0.0",
-  "description": "Node.js client for MongoDB Realm API",
+  "description": "Query lambdas for MongoDB Atlas",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
