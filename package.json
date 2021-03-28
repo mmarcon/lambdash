@@ -9,6 +9,8 @@
   "author": "Massimiliano Marcon <max.marcon@mongodb.com>",
   "license": "Apache-2.0",
   "dependencies": {
+    "crypto-js": "^4.0.0",
+    "digest-fetch": "^1.1.6",
     "dotenv": "^8.2.0",
     "node-fetch": "^2.6.1",
     "pino": "^6.11.2"

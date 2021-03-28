@@ -1,18 +1,34 @@
 require('dotenv').config();
+const process = require('process');
+
+// The Atlas API uses digest auth so we need a special client for it
+const DigestFetch = require('digest-fetch');
+const digestFetch = new DigestFetch(process.env.username, process.env.apiKey);
 const fetch = require('node-fetch');
 const logger = require('pino')({ level: 'debug' });
-const process = require('process');
-const { login, groupIds } = require('./lib/auth')(fetch, { logger: logger.child({ module: 'auth' }) });
-const { getApps, createApp } = require('./lib/groups/apps')(fetch, { logger: logger.child({ module: 'groups' }) });
-const { getServices, createService } = require('./lib/groups/apps/services')(fetch, { logger: logger.child({ module: 'services' }) });
-const { getIncomingWebhooks, createIncomingWebhook } = require('./lib/groups/apps/services/incoming_webooks')(fetch, { logger: logger.child({ module: 'incoming_webhooks' }) });
+const { login, groupIds } = require('./lib/realm/auth')(fetch, { logger: logger.child({ module: 'auth' }) });
+const { getApps, createApp } = require('./lib/realm/groups/apps')(fetch, { logger: logger.child({ module: 'groups' }) });
+const { getServices, createHttpService, createAtlasService } = require('./lib/realm/groups/apps/services')(fetch, { logger: logger.child({ module: 'services' }) });
+const IncomingWebhooks = require('./lib/realm/groups/apps/services/incoming_webooks');
+const { getIncomingWebhooks, createIncomingWebhook } = IncomingWebhooks(fetch, { logger: logger.child({ module: 'incoming_webhooks' }) });
+const { getClusters } = require('./lib/atlas/clusters')(digestFetch.fetch.bind(digestFetch), { logger: logger.child({ module: 'atlas.clusters' }) });
+const { getGroups } = require('./lib/atlas/groups')(digestFetch.fetch.bind(digestFetch), { logger: logger.child({ module: 'atlas.groups' }) });
 
 (async function () {
   const newAppName = 'test-realm-node';
   const newServiceName = 'test-realm-node-service';
+  const atlasServiceName = 'mongodb-atlas-service';
 
   const user = await login(process.env);
   const groups = await groupIds(user);
+
+  // Get groups/projects
+  const groupsInfo = await getGroups({});
+  logger.info(groupsInfo);
+
+  // Get clusters
+  const clusters = await getClusters({ ...user, groupId: groups[0] });
+  logger.info(clusters.map(c => c.name));
 
   // Get apps
   let apps = await getApps({ ...user, groupId: groups[0] });
@@ -37,13 +53,31 @@ const { getIncomingWebhooks, createIncomingWebhook } = require('./lib/groups/app
   if (!services.find(({ name }) => name === newServiceName)) {
     logger.info('Service does not exist. We will create it');
     // Create a new service
-    const createServiceResponse = await createService({ ...user, groupId: groups[0], appId: apps.find(({ name }) => name === newAppName)?.appId, name: newServiceName });
+    const createServiceResponse = await createHttpService({ ...user, groupId: groups[0], appId: apps.find(({ name }) => name === newAppName)?.appId, name: newServiceName });
     logger.info(createServiceResponse);
     // Get services again
     services = await getServices({ ...user, groupId: groups[0], appId: apps.find(({ name }) => name === newAppName)?.appId });
     logger.info(services.map(({ name }) => name));
   } else {
     logger.info('Service already exists, no need to create it');
+  }
+
+  if (!services.find(({ name }) => name === atlasServiceName)) {
+    logger.info('Atlas service does not exist. We will create it');
+    // Create a new service
+    const createServiceResponse = await createAtlasService({
+      ...user,
+      groupId: groups[0],
+      appId: apps.find(({ name }) => name === newAppName)?.appId,
+      name: atlasServiceName,
+      clusterName: clusters[0].name
+    });
+    logger.info(createServiceResponse);
+    // Get services again
+    services = await getServices({ ...user, groupId: groups[0], appId: apps.find(({ name }) => name === newAppName)?.appId });
+    logger.info(services.map(({ name }) => name));
+  } else {
+    logger.info('Atlas service already exists, no need to create it');
   }
 
   // Get incoming webhooks for a service
@@ -60,19 +94,22 @@ const { getIncomingWebhooks, createIncomingWebhook } = require('./lib/groups/app
     groupId: groups[0],
     appId: apps.find(({ name }) => name === newAppName)?.appId,
     serviceId: services.find(({ name }) => name === newServiceName)?.serviceId,
-    name: 'test-realm-node-webhook-00',
-    options: {
-      secret: '432monkeysJumpingOnTheBed'
-    },
-    functionSource: function (payload, response) {
+    name: 'test-realm-node-webhook-02',
+    secret: '432monkeysJumpingOnTheBed',
+    httpMethod: IncomingWebhooks.HTTPMethod.GET,
+    validationMethod: IncomingWebhooks.ValidationMethod.REQUIRE_SECRET,
+    functionSource: `function (payload, response) {
       response.setHeader(
         'Content-Type',
         'application/json'
       );
-      response.setBody(JSON.stringify({ it: 'works!' }));
+      const atlas = context.services.get('mongodb-atlas-service');
+      const db = atlas.db('lambdash');
+      const document = await db.collection('test-collection').findOne();
+      response.setBody(JSON.stringify(document));
       response.setStatusCode(200);
       return { msg: 'done' };
-    }
+    }`
   });
   logger.info(createIncomingWebhookResponse);
 })();
