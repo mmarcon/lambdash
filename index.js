@@ -6,6 +6,7 @@ const DigestFetch = require('digest-fetch');
 const digestFetch = new DigestFetch(process.env.username, process.env.apiKey);
 const fetch = require('node-fetch');
 const logger = require('pino')({ level: 'debug' });
+const BSON = require('bson');
 const { login, groupIds } = require('./lib/realm/auth')(fetch, { logger: logger.child({ module: 'auth' }) });
 const { getApps, createApp } = require('./lib/realm/groups/apps')(fetch, { logger: logger.child({ module: 'groups' }) });
 const { getServices, createHttpService, createAtlasService } = require('./lib/realm/groups/apps/services')(fetch, { logger: logger.child({ module: 'services' }) });
@@ -13,6 +14,7 @@ const IncomingWebhooks = require('./lib/realm/groups/apps/services/incoming_webo
 const { getIncomingWebhooks, createIncomingWebhook } = IncomingWebhooks(fetch, { logger: logger.child({ module: 'incoming_webhooks' }) });
 const { getClusters } = require('./lib/atlas/clusters')(digestFetch.fetch.bind(digestFetch), { logger: logger.child({ module: 'atlas.clusters' }) });
 const { getGroups } = require('./lib/atlas/groups')(digestFetch.fetch.bind(digestFetch), { logger: logger.child({ module: 'atlas.groups' }) });
+const { generateLambda } = require('./lib/lambda-generator');
 
 (async function () {
   const newAppName = 'test-realm-node';
@@ -89,27 +91,62 @@ const { getGroups } = require('./lib/atlas/groups')(digestFetch.fetch.bind(diges
   });
   logger.info(incomingWebhooks);
 
+  // Generate a "lambda" function given a query or aggregation on a collection
+  const lambda = generateLambda({
+    queryOrAggregation: `[
+    {
+      $match: {
+        year: {
+          $gte: from,
+          $lte: to
+        }
+      }
+    },
+    {
+      $unwind: {
+        path: '$genres'
+      }
+    },
+    {
+      $group: {
+        _id: '$genres',
+        total: {
+          $sum: 1
+        }
+      }
+    },
+    {
+      $project: {
+        genre: '$_id',
+        _id: 0,
+        total: 1
+      }
+    },
+    {
+      $sort: {
+        total: -1
+      }
+    }
+  ]`,
+    paramTypes: {
+      from: BSON.Int32,
+      to: BSON.Int32
+    },
+    database: 'sample_mflix',
+    collection: 'movies',
+    service: atlasServiceName
+  });
+
   const createIncomingWebhookResponse = await createIncomingWebhook({
     ...user,
     groupId: groups[0],
     appId: apps.find(({ name }) => name === newAppName)?.appId,
     serviceId: services.find(({ name }) => name === newServiceName)?.serviceId,
-    name: 'test-realm-node-webhook-02',
+    name: 'moviesByGenre3',
     secret: '432monkeysJumpingOnTheBed',
     httpMethod: IncomingWebhooks.HTTPMethod.GET,
     validationMethod: IncomingWebhooks.ValidationMethod.REQUIRE_SECRET,
-    functionSource: `function (payload, response) {
-      response.setHeader(
-        'Content-Type',
-        'application/json'
-      );
-      const atlas = context.services.get('mongodb-atlas-service');
-      const db = atlas.db('lambdash');
-      const document = await db.collection('test-collection').findOne();
-      response.setBody(JSON.stringify(document));
-      response.setStatusCode(200);
-      return { msg: 'done' };
-    }`
+    functionSource: lambda
   });
   logger.info(createIncomingWebhookResponse);
 })();

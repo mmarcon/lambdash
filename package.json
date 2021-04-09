@@ -9,6 +9,9 @@
   "author": "Massimiliano Marcon <max.marcon@mongodb.com>",
   "license": "Apache-2.0",
   "dependencies": {
+    "acorn": "^7.4.1",
+    "acorn-walk": "^8.0.2",
+    "bson": "^4.3.0",
     "crypto-js": "^4.0.0",
     "digest-fetch": "^1.1.6",
     "dotenv": "^8.2.0",
