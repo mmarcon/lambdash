@@ -1,6 +1,6 @@
 {
   "name": "lambdash",
-  "version": "1.0.0",
+  "version": "0.0.1",
   "description": "Query lambdas for MongoDB Atlas",
   "main": "index.js",
   "scripts": {
@@ -16,7 +16,8 @@
     "digest-fetch": "^1.1.6",
     "dotenv": "^8.2.0",
     "node-fetch": "^2.6.1",
-    "pino": "^6.11.2"
+    "pino": "^6.11.2",
+    "uuid": "^8.3.2"
   },
   "devDependencies": {
     "pino-pretty": "^4.7.1",

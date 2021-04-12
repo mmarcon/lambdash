@@ -1,152 +1,159 @@
-require('dotenv').config();
-const process = require('process');
+const {
+  createHash
+} = require('crypto');
 
 // The Atlas API uses digest auth so we need a special client for it
 const DigestFetch = require('digest-fetch');
-const digestFetch = new DigestFetch(process.env.username, process.env.apiKey);
 const fetch = require('node-fetch');
-const logger = require('pino')({ level: 'debug' });
-const BSON = require('bson');
+const logger = require('pino')({ level: 'error' });
+const { URL } = require('url');
 const { login, groupIds } = require('./lib/realm/auth')(fetch, { logger: logger.child({ module: 'auth' }) });
 const { getApps, createApp } = require('./lib/realm/groups/apps')(fetch, { logger: logger.child({ module: 'groups' }) });
 const { getServices, createHttpService, createAtlasService } = require('./lib/realm/groups/apps/services')(fetch, { logger: logger.child({ module: 'services' }) });
 const IncomingWebhooks = require('./lib/realm/groups/apps/services/incoming_webooks');
-const { getIncomingWebhooks, createIncomingWebhook } = IncomingWebhooks(fetch, { logger: logger.child({ module: 'incoming_webhooks' }) });
-const { getClusters } = require('./lib/atlas/clusters')(digestFetch.fetch.bind(digestFetch), { logger: logger.child({ module: 'atlas.clusters' }) });
-const { getGroups } = require('./lib/atlas/groups')(digestFetch.fetch.bind(digestFetch), { logger: logger.child({ module: 'atlas.groups' }) });
+const { createIncomingWebhook } = IncomingWebhooks(fetch, { logger: logger.child({ module: 'incoming_webhooks' }) });
+const atlasClustersAPI = require('./lib/atlas/clusters');
+const atlasGroupsAPI = require('./lib/atlas/groups');
 const { generateLambda } = require('./lib/lambda-generator');
+const EventEmitter = require('events');
+const uuid = require('uuid');
 
-(async function () {
-  const newAppName = 'test-realm-node';
-  const newServiceName = 'test-realm-node-service';
-  const atlasServiceName = 'mongodb-atlas-service';
+const BASE_ATLAS_SERVICE_NAME = 'lambdash-mongodb-atlas-service-';
+const SERVICE_NAME = 'atlas-query-lambdas-service';
+const APP_NAME = 'atlas-query-lambdas';
 
-  const user = await login(process.env);
-  const groups = await groupIds(user);
+const REALM_WEBHOOK_BASE_URL = 'https://webhooks.mongodb-realm.com/api/client/v2.0/app';
 
-  // Get groups/projects
-  const groupsInfo = await getGroups({});
-  logger.info(groupsInfo);
-
-  // Get clusters
-  const clusters = await getClusters({ ...user, groupId: groups[0] });
-  logger.info(clusters.map(c => c.name));
-
-  // Get apps
-  let apps = await getApps({ ...user, groupId: groups[0] });
-  logger.info(apps.map(({ name }) => name));
-
-  if (!apps.find(({ name }) => name === newAppName)) {
-    logger.info('App does not exist. We will create it');
-    // Create a new app
-    const appCreateResponse = await createApp({ ...user, groupId: groups[0], name: newAppName });
-    logger.info(appCreateResponse);
-    // Get apps again
-    apps = await getApps({ ...user, groupId: groups[0] });
-    logger.info(apps.map(({ name }) => name));
-  } else {
-    logger.info('App already exists, no need to create it');
+class Lambdash extends EventEmitter {
+  constructor ({ redactedUrl }) {
+    super();
+    this.redactedUrl = new URL(redactedUrl);
+    const hash = createHash('md5');
+    hash.update(this.redactedUrl.hostname);
+    this.atlasServiceName = BASE_ATLAS_SERVICE_NAME + hash.digest('hex');
   }
 
-  // Get services for new app
-  let services = await getServices({ ...user, groupId: groups[0], appId: apps.find(({ name }) => name === newAppName)?.appId });
-  logger.info(services.map(({ name }) => name));
-
-  if (!services.find(({ name }) => name === newServiceName)) {
-    logger.info('Service does not exist. We will create it');
-    // Create a new service
-    const createServiceResponse = await createHttpService({ ...user, groupId: groups[0], appId: apps.find(({ name }) => name === newAppName)?.appId, name: newServiceName });
-    logger.info(createServiceResponse);
-    // Get services again
-    services = await getServices({ ...user, groupId: groups[0], appId: apps.find(({ name }) => name === newAppName)?.appId });
-    logger.info(services.map(({ name }) => name));
-  } else {
-    logger.info('Service already exists, no need to create it');
+  async login ({ username, apiKey }) {
+    this.credentials = { username, apiKey };
+    const digestFetch = new DigestFetch(username, apiKey);
+    this.getClusters = atlasClustersAPI(digestFetch.fetch.bind(digestFetch), { logger: logger.child({ module: 'atlas.clusters' }) })?.getClusters;
+    this.getGroups = atlasGroupsAPI(digestFetch.fetch.bind(digestFetch), { logger: logger.child({ module: 'atlas.groups' }) })?.getGroups;
+    await this._login();
+    await this._fetchInfo();
+    this.emit('ready');
   }
 
-  if (!services.find(({ name }) => name === atlasServiceName)) {
-    logger.info('Atlas service does not exist. We will create it');
-    // Create a new service
-    const createServiceResponse = await createAtlasService({
-      ...user,
-      groupId: groups[0],
-      appId: apps.find(({ name }) => name === newAppName)?.appId,
-      name: atlasServiceName,
-      clusterName: clusters[0].name
+  async _login () {
+    this.user = await login(this.credentials);
+  }
+
+  async _fetchInfo () {
+    const groups = await groupIds(this.user);
+    // For each group, now fetch the clusters
+    // This can be optimized for cases where there are a lot
+    // of groups but for now let's just fetch everything
+    const groupsToClusters = await groups.reduce(async (acc, groupId) => {
+      const clusters = await this.getClusters({ groupId });
+      acc[groupId] = clusters;
+      return acc;
+    }, {});
+    // Attempt to find the right group and cluster
+    // This should probably be done at the previous step
+    Object.keys(groupsToClusters).forEach((groupId) => {
+      const clusters = groupsToClusters[groupId];
+      const rightCluster = clusters.find(c => {
+        const srvUrl = new URL(c.srvAddress);
+        return srvUrl.hostname === this.redactedUrl.hostname;
+      });
+      if (rightCluster) {
+        this.groupId = groupId;
+        this.cluster = rightCluster;
+      }
     });
-    logger.info(createServiceResponse);
-    // Get services again
-    services = await getServices({ ...user, groupId: groups[0], appId: apps.find(({ name }) => name === newAppName)?.appId });
-    logger.info(services.map(({ name }) => name));
-  } else {
-    logger.info('Atlas service already exists, no need to create it');
+    if (!this.groupId) {
+      throw new Error('Could not find the right cluster');
+    }
   }
 
-  // Get incoming webhooks for a service
-  const incomingWebhooks = await getIncomingWebhooks({
-    ...user,
-    groupId: groups[0],
-    appId: apps.find(({ name }) => name === newAppName)?.appId,
-    serviceId: services.find(({ name }) => name === newServiceName)?.serviceId
-  });
-  logger.info(incomingWebhooks);
-
-  // Generate a "lambda" function given a query or aggregation on a collection
-  const lambda = generateLambda({
-    queryOrAggregation: `[
-    {
-      $match: {
-        year: {
-          $gte: from,
-          $lte: to
-        }
-      }
-    },
-    {
-      $unwind: {
-        path: '$genres'
-      }
-    },
-    {
-      $group: {
-        _id: '$genres',
-        total: {
-          $sum: 1
-        }
-      }
-    },
-    {
-      $project: {
-        genre: '$_id',
-        _id: 0,
-        total: 1
-      }
-    },
-    {
-      $sort: {
-        total: -1
-      }
+  async createLambda (name, options) {
+    await this._ensureAppExists();
+    await this._ensureServicesExists();
+    const lambda = generateLambda({ ...options, service: this.atlasServiceName });
+    const secret = options.secret ? options.secret : uuid.v4();
+    const url = `${REALM_WEBHOOK_BASE_URL}/app/${this.urlAppId}/service/${SERVICE_NAME}/incoming_webhook/genres2?secret=${secret}`;
+    try {
+      await createIncomingWebhook({
+        ...this.user,
+        groupId: this.groupId,
+        appId: this.appId,
+        serviceId: this.httpServiceId,
+        name,
+        secret,
+        httpMethod: IncomingWebhooks.HTTPMethod.GET,
+        validationMethod: IncomingWebhooks.ValidationMethod.REQUIRE_SECRET,
+        functionSource: lambda
+      });
+      this.emit('lambda created', {
+        secret,
+        url,
+        curl: `curl ${url}`
+      });
+    } catch (e) {
+      this.emit('error', e.message);
     }
-  ]`,
-    paramTypes: {
-      from: BSON.Int32,
-      to: BSON.Int32
-    },
-    database: 'sample_mflix',
-    collection: 'movies',
-    service: atlasServiceName
-  });
+  }
 
-  const createIncomingWebhookResponse = await createIncomingWebhook({
-    ...user,
-    groupId: groups[0],
-    appId: apps.find(({ name }) => name === newAppName)?.appId,
-    serviceId: services.find(({ name }) => name === newServiceName)?.serviceId,
-    name: 'moviesByGenre3',
-    secret: '432monkeysJumpingOnTheBed',
-    httpMethod: IncomingWebhooks.HTTPMethod.GET,
-    validationMethod: IncomingWebhooks.ValidationMethod.REQUIRE_SECRET,
-    functionSource: lambda
-  });
-  logger.info(createIncomingWebhookResponse);
-})();
+  async _ensureAppExists () {
+    const apps = await getApps({ ...this.user, groupId: this.groupId });
+    const app = apps.find(({ name }) => name === APP_NAME);
+    if (!app) {
+      logger.info('App does not exist. We will create it');
+      // Create a new app
+      const appCreateResponse = await createApp({ ...this.user, groupId: this.groupId, name: APP_NAME });
+      this.appId = appCreateResponse?.appId;
+      this.urlAppId = appCreateResponse?.client_app_id;
+      this.emit('realm app ready', this.appId);
+    } else {
+      this.appId = app.appId;
+      this.urlAppId = app.client_app_id;
+      logger.info('App already exists, no need to create it');
+      this.emit('realm app ready', this.appId);
+    }
+  }
+
+  async _ensureServicesExists () {
+    const services = await getServices({ ...this.user, groupId: this.groupId, appId: this.appId });
+    const httpService = services.find(({ name }) => name === SERVICE_NAME);
+    if (!httpService) {
+      logger.info('Service does not exist. We will create it');
+      // Create a new service
+      const createServiceResponse = await createHttpService({ ...this.user, groupId: this.groupId, appId: this.appId, name: SERVICE_NAME });
+      this.httpServiceId = createServiceResponse?.serviceId;
+      this.emit('realm http service ready', this.httpServiceId);
+    } else {
+      this.httpServiceId = httpService.serviceId;
+      logger.info('Service already exists, no need to create it');
+      this.emit('realm http service ready', this.httpServiceId);
+    }
+
+    if (!services.find(({ name }) => name === this.atlasServiceName)) {
+      logger.info('Atlas service does not exist. We will create it');
+      // Create a new service
+      await createAtlasService({
+        ...this.user,
+        groupId: this.groupId,
+        appId: this.appId,
+        name: this.atlasServiceName,
+        clusterName: this.cluster.name
+      });
+      this.emit('atlas service ready');
+    } else {
+      logger.info('Atlas service already exists, no need to create it');
+      this.emit('atlas service ready');
+    }
+  }
+}
+
+module.exports = {
+  Lambdash
+};
