@@ -13,8 +13,8 @@ async function run () {
   lambdash.on('lambda created', result => console.log(result?.curl));
   lambdash.on('error', e => console.log(e));
   await lambdash.login(process.env);
-  await lambdash.createLambda('popular_genres', {
-    queryOrAggregation: `[
+  await lambdash.createLambdaFromCommand('popular_genres_from_command', {
+    command: `db.movies.aggregate([
     {
       $match: {
         year: {
@@ -48,13 +48,12 @@ async function run () {
         total: -1
       }
     }
-  ]`,
+  ])`,
     paramTypes: {
       from: BSON.Int32,
       to: BSON.Int32
     },
-    database: 'sample_mflix',
-    collection: 'movies'
+    database: 'sample_mflix'
   });
 }
 

@@ -11,7 +11,7 @@
       "skipFiles": [
         "<node_internals>/**"
       ],
-      "program": "${workspaceFolder}/poc2.js"
+      "program": "${workspaceFolder}/poc3.js"
     }
   ]
 }

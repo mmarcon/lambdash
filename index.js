@@ -14,7 +14,7 @@ const IncomingWebhooks = require('./lib/realm/groups/apps/services/incoming_webo
 const { createIncomingWebhook } = IncomingWebhooks(fetch, { logger: logger.child({ module: 'incoming_webhooks' }) });
 const atlasClustersAPI = require('./lib/atlas/clusters');
 const atlasGroupsAPI = require('./lib/atlas/groups');
-const { generateLambda } = require('./lib/lambda-generator');
+const { generateLambda, generateLambdaFromCommand } = require('./lib/lambda-generator');
 const EventEmitter = require('events');
 const uuid = require('uuid');
 
@@ -86,6 +86,38 @@ class Lambdash extends EventEmitter {
     await this._ensureAppExists();
     await this._ensureServicesExists();
     const lambda = generateLambda({ ...options, service: this.atlasServiceName });
+    const secret = options.secret ? options.secret : uuid.v4();
+    let url = `${REALM_WEBHOOK_BASE_URL}/${this.urlAppId}/service/${SERVICE_NAME}/incoming_webhook/${name}?secret=${secret}`;
+    const queryFromParams = Lambdash.paramTypesToQuery(options.paramTypes);
+    if (queryFromParams.length > 0) {
+      url += `&${queryFromParams}`;
+    }
+    try {
+      await createIncomingWebhook({
+        ...this.user,
+        groupId: this.groupId,
+        appId: this.appId,
+        serviceId: this.httpServiceId,
+        name,
+        secret,
+        httpMethod: IncomingWebhooks.HTTPMethod.GET,
+        validationMethod: IncomingWebhooks.ValidationMethod.REQUIRE_SECRET,
+        functionSource: lambda
+      });
+      this.emit('lambda created', {
+        secret,
+        url,
+        curl: `curl "${url}"`
+      });
+    } catch (e) {
+      this.emit('error', e.message);
+    }
+  }
+
+  async createLambdaFromCommand (name, options) {
+    await this._ensureAppExists();
+    await this._ensureServicesExists();
+    const lambda = generateLambdaFromCommand({ ...options, service: this.atlasServiceName });
     const secret = options.secret ? options.secret : uuid.v4();
     let url = `${REALM_WEBHOOK_BASE_URL}/${this.urlAppId}/service/${SERVICE_NAME}/incoming_webhook/${name}?secret=${secret}`;
     const queryFromParams = Lambdash.paramTypesToQuery(options.paramTypes);
