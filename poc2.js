@@ -7,13 +7,13 @@ const { Lambdash } = require('.');
 async function run () {
   const lambdash = new Lambdash({ redactedUrl: process.env.getMongoResult });
   lambdash.on('ready', () => console.log('lambdash ready!'));
-  lambdash.on('realm app ready', appId => console.log('realm app ready', appId));
-  lambdash.on('realm http service ready', httpServiceId => console.log('realm http service ready', httpServiceId));
+  lambdash.on('realm app ready', () => console.log('realm app ready'));
+  lambdash.on('realm http service ready', () => console.log('realm http service ready'));
   lambdash.on('atlas service ready', () => console.log('atlas service ready'));
-  lambdash.on('lambda created', secret => console.log(secret));
+  lambdash.on('lambda created', result => console.log(result?.curl));
   lambdash.on('error', e => console.log(e));
   await lambdash.login(process.env);
-  await lambdash.createLambda('genres2', {
+  await lambdash.createLambda('popular_genres', {
     queryOrAggregation: `[
     {
       $match: {
