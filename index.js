@@ -83,9 +83,10 @@ class Lambdash extends EventEmitter {
   }
 
   async createLambda (name, options) {
+    this.emit('creating lambda');
     await this._ensureAppExists();
     await this._ensureServicesExists();
-    this.emit('creating lambda');
+    this.emit('creating function');
     const lambda = generateLambda({ ...options, service: this.atlasServiceName });
     const secret = options.secret ? options.secret : uuid.v4();
     let url = `${REALM_WEBHOOK_BASE_URL}/${this.urlAppId}/service/${SERVICE_NAME}/incoming_webhook/${name}?secret=${secret}`;
@@ -116,9 +117,10 @@ class Lambdash extends EventEmitter {
   }
 
   async createLambdaFromCommand (name, options) {
+    this.emit('creating lambda');
     await this._ensureAppExists();
     await this._ensureServicesExists();
-    this.emit('creating lambda');
+    this.emit('creating function');
     const lambda = generateLambdaFromCommand({ ...options, service: this.atlasServiceName });
     const secret = options.secret ? options.secret : uuid.v4();
     let url = `${REALM_WEBHOOK_BASE_URL}/${this.urlAppId}/service/${SERVICE_NAME}/incoming_webhook/${name}?secret=${secret}`;
@@ -149,7 +151,7 @@ class Lambdash extends EventEmitter {
   }
 
   async _ensureAppExists () {
-    this.emit('ensuring realm app');
+    this.emit('setting up realm app');
     const apps = await getApps({ ...this.user, groupId: this.groupId });
     const app = apps.find(({ name }) => name === APP_NAME);
     if (!app) {
