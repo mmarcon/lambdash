@@ -4,7 +4,7 @@
   "description": "Query lambdas for MongoDB Atlas",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "tape 'tests/**/*.spec.js' | tap-spec"
   },
   "author": "Massimiliano Marcon <max.marcon@mongodb.com>",
   "license": "Apache-2.0",
@@ -15,12 +15,15 @@
     "crypto-js": "^4.0.0",
     "digest-fetch": "^1.1.6",
     "dotenv": "^8.2.0",
+    "json5": "^2.2.0",
     "node-fetch": "^2.6.1",
     "pino": "^6.11.2",
     "uuid": "^8.3.2"
   },
   "devDependencies": {
     "pino-pretty": "^4.7.1",
-    "semistandard": "^16.0.0"
+    "semistandard": "^16.0.0",
+    "tap-spec": "^5.0.0",
+    "tape": "^5.2.2"
   }
 }
