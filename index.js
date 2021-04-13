@@ -75,8 +75,13 @@ class Lambdash extends EventEmitter {
     }
   }
 
-  static paramTypesToQuery (paramTypes = {}) {
-    return Object.keys(paramTypes).reduce((acc, key) => {
+  static paramToQuery (paramTypes = {}, variables = []) {
+    const variablesAsObject = variables.reduce((acc, curr) => {
+      acc[curr] = 'String';
+      return acc;
+    }, {});
+    const unionParamVariables = { ...variablesAsObject, paramTypes };
+    return Object.keys(unionParamVariables).reduce((acc, key) => {
       const kv = `${key}=<${paramTypes[key].name}>`;
       return acc.length > 0 ? acc + `&${kv}` : kv;
     }, '');
@@ -90,7 +95,7 @@ class Lambdash extends EventEmitter {
     const lambda = generateLambda({ ...options, service: this.atlasServiceName });
     const secret = options.secret ? options.secret : uuid.v4();
     let url = `${REALM_WEBHOOK_BASE_URL}/${this.urlAppId}/service/${SERVICE_NAME}/incoming_webhook/${name}?secret=${secret}`;
-    const queryFromParams = Lambdash.paramTypesToQuery(options.paramTypes);
+    const queryFromParams = Lambdash.paramToQuery(options.paramTypes, lambda.variables);
     if (queryFromParams.length > 0) {
       url += `&${queryFromParams}`;
     }
@@ -104,7 +109,7 @@ class Lambdash extends EventEmitter {
         secret,
         httpMethod: IncomingWebhooks.HTTPMethod.GET,
         validationMethod: IncomingWebhooks.ValidationMethod.REQUIRE_SECRET,
-        functionSource: lambda
+        functionSource: lambda.fn
       });
       this.emit('lambda created', {
         secret,
@@ -124,7 +129,7 @@ class Lambdash extends EventEmitter {
     const lambda = generateLambdaFromCommand({ ...options, service: this.atlasServiceName });
     const secret = options.secret ? options.secret : uuid.v4();
     let url = `${REALM_WEBHOOK_BASE_URL}/${this.urlAppId}/service/${SERVICE_NAME}/incoming_webhook/${name}?secret=${secret}`;
-    const queryFromParams = Lambdash.paramTypesToQuery(options.paramTypes);
+    const queryFromParams = Lambdash.paramToQuery(options.paramTypes, lambda.variables);
     if (queryFromParams.length > 0) {
       url += `&${queryFromParams}`;
     }
@@ -138,7 +143,7 @@ class Lambdash extends EventEmitter {
         secret,
         httpMethod: IncomingWebhooks.HTTPMethod.GET,
         validationMethod: IncomingWebhooks.ValidationMethod.REQUIRE_SECRET,
-        functionSource: lambda
+        functionSource: lambda.fn
       });
       this.emit('lambda created', {
         secret,
