@@ -75,7 +75,7 @@ class Lambdash extends EventEmitter {
     }
   }
 
-  static paramsToQuery (paramTypes = {}, variables = []) {
+  static determineParams (paramTypes = {}, variables = []) {
     const variablesAsObject = variables.reduce((acc, curr) => {
       acc[curr] = 'String';
       return acc;
@@ -84,8 +84,10 @@ class Lambdash extends EventEmitter {
     return Object.keys(unionParamVariables).reduce((acc, key) => {
       const paramTypeName = (typeof unionParamVariables[key] === 'string') ? unionParamVariables[key] : unionParamVariables[key].name;
       const kv = `${key}=<${paramTypeName}>`;
-      return acc.length > 0 ? acc + `&${kv}` : kv;
-    }, '');
+      acc.paramsQueryString = acc.paramsQueryString.length > 0 ? acc.paramsQueryString + `&${kv}` : kv;
+      acc.params[key] = paramTypeName;
+      return acc;
+    }, { paramsQueryString: '', params: {} });
   }
 
   async createLambda (name, options) {
@@ -96,9 +98,9 @@ class Lambdash extends EventEmitter {
     const lambda = generateLambda({ ...options, service: this.atlasServiceName });
     const secret = options.secret ? options.secret : uuid.v4();
     let url = `${REALM_WEBHOOK_BASE_URL}/${this.urlAppId}/service/${SERVICE_NAME}/incoming_webhook/${name}?secret=${secret}`;
-    const queryFromParams = Lambdash.paramsToQuery(options.paramTypes, lambda.variables);
-    if (queryFromParams.length > 0) {
-      url += `&${queryFromParams}`;
+    const { params, paramsQueryString } = Lambdash.determineParams(options.paramTypes, lambda.variables);
+    if (paramsQueryString.length > 0) {
+      url += `&${paramsQueryString}`;
     }
     try {
       await createIncomingWebhook({
@@ -113,9 +115,11 @@ class Lambdash extends EventEmitter {
         functionSource: lambda.fn
       });
       this.emit('lambda created', {
+        name,
         secret,
         url,
-        curl: `curl "${url}"`
+        curl: `curl "${url}"`,
+        params
       });
     } catch (e) {
       this.emit('error', e.message);
@@ -130,9 +134,9 @@ class Lambdash extends EventEmitter {
     const lambda = generateLambdaFromCommand({ ...options, service: this.atlasServiceName });
     const secret = options.secret ? options.secret : uuid.v4();
     let url = `${REALM_WEBHOOK_BASE_URL}/${this.urlAppId}/service/${SERVICE_NAME}/incoming_webhook/${name}?secret=${secret}`;
-    const queryFromParams = Lambdash.paramsToQuery(options.paramTypes, lambda.variables);
-    if (queryFromParams.length > 0) {
-      url += `&${queryFromParams}`;
+    const { params, paramsQueryString } = Lambdash.determineParams(options.paramTypes, lambda.variables);
+    if (paramsQueryString.length > 0) {
+      url += `&${paramsQueryString}`;
     }
     try {
       await createIncomingWebhook({
@@ -147,9 +151,11 @@ class Lambdash extends EventEmitter {
         functionSource: lambda.fn
       });
       this.emit('lambda created', {
+        name,
         secret,
         url,
-        curl: `curl "${url}"`
+        curl: `curl "${url}"`,
+        params
       });
     } catch (e) {
       this.emit('error', e.message);
