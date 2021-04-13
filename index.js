@@ -80,7 +80,7 @@ class Lambdash extends EventEmitter {
       acc[curr] = 'String';
       return acc;
     }, {});
-    const unionParamVariables = { ...variablesAsObject, paramTypes };
+    const unionParamVariables = { ...variablesAsObject, ...paramTypes };
     return Object.keys(unionParamVariables).reduce((acc, key) => {
       const kv = `${key}=<${paramTypes[key].name}>`;
       return acc.length > 0 ? acc + `&${kv}` : kv;
