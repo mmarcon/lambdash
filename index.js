@@ -126,15 +126,15 @@ class Lambdash extends EventEmitter {
     }
   }
 
-  async createLambdaFromCommand (name, options) {
+  async createLambdaFromCommand (name, config) {
     this.emit('creating lambda');
     await this._ensureAppExists();
     await this._ensureServicesExists();
     this.emit('creating function');
-    const lambda = generateLambdaFromCommand({ ...options, service: this.atlasServiceName });
+    const { fn, options, variables } = generateLambdaFromCommand({ ...config, service: this.atlasServiceName });
     const secret = options.secret ? options.secret : uuid.v4();
     let url = `${REALM_WEBHOOK_BASE_URL}/${this.urlAppId}/service/${SERVICE_NAME}/incoming_webhook/${name}?secret=${secret}`;
-    const { params, paramsQueryString } = Lambdash.determineParams(options.paramTypes, lambda.variables);
+    const { params, paramsQueryString } = Lambdash.determineParams(options.paramTypes, variables);
     if (paramsQueryString.length > 0) {
       url += `&${paramsQueryString}`;
     }
@@ -148,7 +148,7 @@ class Lambdash extends EventEmitter {
         secret,
         httpMethod: IncomingWebhooks.HTTPMethod.GET,
         validationMethod: IncomingWebhooks.ValidationMethod.REQUIRE_SECRET,
-        functionSource: lambda.fn
+        functionSource: fn
       });
       this.emit('lambda created', {
         name,
