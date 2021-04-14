@@ -17,6 +17,7 @@ const atlasGroupsAPI = require('./lib/atlas/groups');
 const { generateLambda, generateLambdaFromCommand } = require('./lib/lambda-generator');
 const EventEmitter = require('events');
 const uuid = require('uuid');
+const slugify = require('slugify');
 
 const BASE_ATLAS_SERVICE_NAME = 'lambdash-mongodb-atlas-service-';
 const SERVICE_NAME = 'atlas-query-lambdas-service';
@@ -132,15 +133,12 @@ class Lambdash extends EventEmitter {
         collection: options.collection
       });
     } catch (e) {
-      this.emit('error', e.message);
+      this.emit('error', e);
     }
   }
 
   async createLambdaFromCommand (config) {
-    this.emit('creating lambda');
-    await this._ensureAppExists();
-    await this._ensureServicesExists();
-    this.emit('creating function');
+    this.emit('generating function');
     let fn, options, variables, database, collection;
     try {
       ({ fn, options, variables, database, collection } = generateLambdaFromCommand({ ...config, service: this.atlasServiceName }));
@@ -153,12 +151,17 @@ class Lambdash extends EventEmitter {
       return null;
     }
     const secret = options.secret ? options.secret : uuid.v4();
-    let url = `${REALM_WEBHOOK_BASE_URL}/${this.urlAppId}/service/${SERVICE_NAME}/incoming_webhook/${options.name}?secret=${secret}`;
+    const httpServiceName = options.appName ? slugify(options.appName, { strict: true }) : SERVICE_NAME;
+    let url = `${REALM_WEBHOOK_BASE_URL}/${this.urlAppId}/service/${httpServiceName}/incoming_webhook/${options.name}?secret=${secret}`;
     const { params, paramsQueryString } = Lambdash.determineParams(options.paramTypes, variables);
     if (paramsQueryString.length > 0) {
       url += `&${paramsQueryString}`;
     }
+    this.emit('function generated');
+    await this._ensureAppExists();
+    await this._ensureServicesExists({ httpServiceName });
     try {
+      this.emit('creating lambda');
       await createIncomingWebhook({
         ...this.user,
         groupId: this.groupId,
@@ -178,10 +181,11 @@ class Lambdash extends EventEmitter {
         params,
         cluster: this.cluster,
         database,
-        collection
+        collection,
+        appName: options.appName
       });
     } catch (e) {
-      this.emit('error', e.message);
+      this.emit('error', e);
     }
   }
 
@@ -204,14 +208,14 @@ class Lambdash extends EventEmitter {
     }
   }
 
-  async _ensureServicesExists () {
+  async _ensureServicesExists ({ httpServiceName = SERVICE_NAME }) {
     this.emit('setting up realm http service');
     const services = await getServices({ ...this.user, groupId: this.groupId, appId: this.appId });
-    const httpService = services.find(({ name }) => name === SERVICE_NAME);
+    const httpService = services.find(({ name }) => name === httpServiceName);
     if (!httpService) {
       logger.info('Service does not exist. We will create it');
       // Create a new service
-      const createServiceResponse = await createHttpService({ ...this.user, groupId: this.groupId, appId: this.appId, name: SERVICE_NAME });
+      const createServiceResponse = await createHttpService({ ...this.user, groupId: this.groupId, appId: this.appId, name: httpServiceName });
       this.httpServiceId = createServiceResponse?.serviceId;
       this.emit('realm http service ready', this.httpServiceId);
     } else {
