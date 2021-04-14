@@ -34,13 +34,14 @@ class Lambdash extends EventEmitter {
   }
 
   async login ({ username, apiKey }) {
+    this.emit('login started');
     this.credentials = { username, apiKey };
     const digestFetch = new DigestFetch(username, apiKey);
     this.getClusters = atlasClustersAPI(digestFetch.fetch.bind(digestFetch), { logger: logger.child({ module: 'atlas.clusters' }) })?.getClusters;
     this.getGroups = atlasGroupsAPI(digestFetch.fetch.bind(digestFetch), { logger: logger.child({ module: 'atlas.groups' }) })?.getGroups;
     await this._login();
     await this._fetchInfo();
-    this.emit('ready');
+    this.emit('login done');
   }
 
   async _login () {
