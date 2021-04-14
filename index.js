@@ -152,14 +152,14 @@ class Lambdash extends EventEmitter {
     }
     const secret = options.secret ? options.secret : uuid.v4();
     const httpServiceName = options.appName ? slugify(options.appName, { strict: true }) : SERVICE_NAME;
+    this.emit('function generated');
+    await this._ensureAppExists();
+    await this._ensureServicesExists({ httpServiceName });
     let url = `${REALM_WEBHOOK_BASE_URL}/${this.urlAppId}/service/${httpServiceName}/incoming_webhook/${options.name}?secret=${secret}`;
     const { params, paramsQueryString } = Lambdash.determineParams(options.paramTypes, variables);
     if (paramsQueryString.length > 0) {
       url += `&${paramsQueryString}`;
     }
-    this.emit('function generated');
-    await this._ensureAppExists();
-    await this._ensureServicesExists({ httpServiceName });
     try {
       this.emit('creating lambda');
       await createIncomingWebhook({
