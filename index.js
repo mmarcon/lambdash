@@ -71,7 +71,7 @@ class Lambdash extends EventEmitter {
       }
     });
     if (!this.groupId) {
-      throw new Error('Could not find the right cluster');
+      throw new SyntaxError('Could not find the right cluster');
     }
   }
 
@@ -95,7 +95,13 @@ class Lambdash extends EventEmitter {
     await this._ensureAppExists();
     await this._ensureServicesExists();
     this.emit('creating function');
-    const lambda = generateLambda({ ...options, service: this.atlasServiceName });
+    let lambda;
+    try {
+      lambda = generateLambda({ ...options, service: this.atlasServiceName });
+    } catch {
+      this.emit('error', new SyntaxError('parsing error'));
+      return;
+    }
     const secret = options.secret ? options.secret : uuid.v4();
     let url = `${REALM_WEBHOOK_BASE_URL}/${this.urlAppId}/service/${SERVICE_NAME}/incoming_webhook/${name}?secret=${secret}`;
     const { params, paramsQueryString } = Lambdash.determineParams(options.paramTypes, lambda.variables);
@@ -126,14 +132,24 @@ class Lambdash extends EventEmitter {
     }
   }
 
-  async createLambdaFromCommand (name, config) {
+  async createLambdaFromCommand (config) {
     this.emit('creating lambda');
     await this._ensureAppExists();
     await this._ensureServicesExists();
     this.emit('creating function');
-    const { fn, options, variables } = generateLambdaFromCommand({ ...config, service: this.atlasServiceName });
+    let fn, options, variables;
+    try {
+      ({ fn, options, variables } = generateLambdaFromCommand({ ...config, service: this.atlasServiceName }));
+    } catch {
+      this.emit('error', new SyntaxError('parsing error'));
+      return null;
+    }
+    if (!options.name) {
+      this.emit('error', new TypeError('lambda name missing'));
+      return null;
+    }
     const secret = options.secret ? options.secret : uuid.v4();
-    let url = `${REALM_WEBHOOK_BASE_URL}/${this.urlAppId}/service/${SERVICE_NAME}/incoming_webhook/${name}?secret=${secret}`;
+    let url = `${REALM_WEBHOOK_BASE_URL}/${this.urlAppId}/service/${SERVICE_NAME}/incoming_webhook/${options.name}?secret=${secret}`;
     const { params, paramsQueryString } = Lambdash.determineParams(options.paramTypes, variables);
     if (paramsQueryString.length > 0) {
       url += `&${paramsQueryString}`;
@@ -144,14 +160,14 @@ class Lambdash extends EventEmitter {
         groupId: this.groupId,
         appId: this.appId,
         serviceId: this.httpServiceId,
-        name,
+        name: options.name,
         secret,
         httpMethod: IncomingWebhooks.HTTPMethod.GET,
         validationMethod: IncomingWebhooks.ValidationMethod.REQUIRE_SECRET,
         functionSource: fn
       });
       this.emit('lambda created', {
-        name,
+        name: options.name,
         secret,
         url,
         curl: `curl "${url}"`,
