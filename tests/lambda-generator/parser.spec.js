@@ -61,4 +61,15 @@ test('parse mdb commands into lambda-ready queries', t => {
     t.strictEqual(parsed.options.paramTypes.to, 'Int32', 'parses right param type (2)');
     t.strictEqual(parsed.collection, 'myCollection', 'finds collection name');
   });
+  t.test('aggregation with nested variables and options', t => {
+    t.plan(7);
+    const parsed = parseFromCommand('db.myCollection.aggregate([{$match: {year: {$gte: from, $lte: to}, genres: {$in: [foo, bar]}}}]).lambda({paramTypes: {from: "Int32", to: "Int32"}})');
+    t.strictEqual(parsed.query, '[{$match: {year: {$gte: from, $lte: to}, genres: {$in: [foo, bar]}}}]', 'keeps aggregation body intact');
+    t.strictEqual(parsed.type, 'aggregation', 'parses aggregation correctly');
+    t.strictEqual(parsed.variables.length, 4, 'two variables');
+    t.deepEqual(parsed.variables, ['from', 'to', 'foo', 'bar'], 'detects right variables');
+    t.strictEqual(parsed.options.paramTypes.from, 'Int32', 'parses right param type (1)');
+    t.strictEqual(parsed.options.paramTypes.to, 'Int32', 'parses right param type (2)');
+    t.strictEqual(parsed.collection, 'myCollection', 'finds collection name');
+  });
 });
