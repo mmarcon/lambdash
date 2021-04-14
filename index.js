@@ -125,7 +125,10 @@ class Lambdash extends EventEmitter {
         secret,
         url,
         curl: `curl "${url}"`,
-        params
+        params,
+        cluster: this.cluster,
+        database: options.database,
+        collection: options.collection
       });
     } catch (e) {
       this.emit('error', e.message);
@@ -137,9 +140,9 @@ class Lambdash extends EventEmitter {
     await this._ensureAppExists();
     await this._ensureServicesExists();
     this.emit('creating function');
-    let fn, options, variables;
+    let fn, options, variables, database, collection;
     try {
-      ({ fn, options, variables } = generateLambdaFromCommand({ ...config, service: this.atlasServiceName }));
+      ({ fn, options, variables, database, collection } = generateLambdaFromCommand({ ...config, service: this.atlasServiceName }));
     } catch {
       this.emit('error', new SyntaxError('parsing error'));
       return null;
@@ -171,7 +174,10 @@ class Lambdash extends EventEmitter {
         secret,
         url,
         curl: `curl "${url}"`,
-        params
+        params,
+        cluster: this.cluster,
+        database,
+        collection
       });
     } catch (e) {
       this.emit('error', e.message);
