@@ -4,7 +4,7 @@
 
 ## Not production ready!
 
-This code is highly experimental and covers mostly the happy path, there is no testing and no good logic for error handling.
+This code is highly experimental and covers mostly the happy path, there is almost no testing and no good logic for error handling.
 
 ---
 
