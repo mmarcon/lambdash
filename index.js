@@ -26,9 +26,9 @@ const APP_NAME = 'atlas-query-lambdas';
 const REALM_WEBHOOK_BASE_URL = 'https://webhooks.mongodb-realm.com/api/client/v2.0/app';
 
 class Lambdash extends EventEmitter {
-  constructor ({ redactedUrl }) {
+  constructor ({ clusterConnectionString }) {
     super();
-    this.redactedUrl = new URL(redactedUrl);
+    this.redactedUrl = new URL(clusterConnectionString);
     const hash = createHash('md5');
     hash.update(this.redactedUrl.hostname);
     this.atlasServiceName = BASE_ATLAS_SERVICE_NAME + hash.digest('hex');
