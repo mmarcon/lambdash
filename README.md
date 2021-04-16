@@ -80,4 +80,4 @@ This works similar as the above, except that all the parameters are passed expic
 to extract the variables that will become query parameters when the query lambda is generated. **This method is less battle-tested than the one above.**
 
 #### Credits:
- * **Icon: ** Lamb by Symbolon from the Noun Project
+ * **Icon:** Lamb by Symbolon from the Noun Project
