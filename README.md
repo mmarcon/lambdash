@@ -50,7 +50,7 @@ login with the Realm Admin API to fetch the auth tokens.
 
 ```javascript
 await lambdash.createLambdaFromCommand({
-  command: `db.collToUse.aggregate([{$match: {foo: {$gt: bar}}}]).lambda({name: 'queryLambdaName', paramTypes: {bar: 'Int32'}, secret: '321littleMonkeysJumpingOnTheBed'})`,
+  command: `db.collToUse.aggregate([{$match: {foo: {$gt: bar}}}]).lambda({name: 'queryLambdaName', paramTypes: {bar: 'Int32'}, secret: '321littleMonkeysJumpingOnTheBed', format: 'csv'})`,
   database: 'databaseToUse'
 });
 ```
@@ -62,6 +62,8 @@ Then, based on the information that was extracted, it will generate a Real funct
 necessary Realm plumbing (App setup and HTTP and Atlas services creation).
 
 If `secret` is not specified, Lambdash will generate a random one to secure the endpoint.
+
+`format` can be `json` (the default) or `csv`.
 
 There is also another method:
 

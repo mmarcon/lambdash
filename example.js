@@ -1,19 +1,14 @@
 require('dotenv').config();
 const process = require('process');
-const BSON = require('bson');
 
 const { Lambdash } = require('.');
 
 async function run () {
-  const lambdash = new Lambdash({ redactedUrl: process.env.getMongoResult });
-  lambdash.on('ready', () => console.log('lambdash ready!'));
-  lambdash.on('realm app ready', () => console.log('realm app ready'));
-  lambdash.on('realm http service ready', () => console.log('realm http service ready'));
-  lambdash.on('atlas service ready', () => console.log('atlas service ready'));
+  const lambdash = new Lambdash({ clusterConnectionString: process.env.getMongoResult });
   lambdash.on('lambda created', result => console.log(result?.curl));
   lambdash.on('error', e => console.log(e));
   await lambdash.login(process.env);
-  await lambdash.createLambdaFromCommand('popular_genres_from_command', {
+  await lambdash.createLambdaFromCommand({
     command: `db.movies.aggregate([
     {
       $match: {
@@ -48,11 +43,14 @@ async function run () {
         total: -1
       }
     }
-  ])`,
+  ]).lambda({
+    name: 'foo-csv',
     paramTypes: {
-      from: BSON.Int32,
-      to: BSON.Int32
+      from: 'Int32',
+      to: 'Int32'
     },
+    format: 'csv'
+  })`,
     database: 'sample_mflix'
   });
 }
