@@ -38,7 +38,6 @@ const Lambdash = require('lambdash');
 const lambdash = new Lambdash({ clusterConnectionString: 'mongodb+srv://some.url?options' });
 
 ```
-HGOWJQSI:5fa73ef7-56b2-48bb-a99f-0fe5ef09bca7
 #### Login
 
 ```javascript
