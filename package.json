@@ -1,6 +1,6 @@
 {
   "name": "mdb-lambdash",
-  "version": "1.5.2",
+  "version": "1.5.3",
   "description": "Query lambdas for MongoDB Atlas",
   "main": "index.js",
   "scripts": {
