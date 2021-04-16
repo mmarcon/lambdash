@@ -58,7 +58,7 @@ await lambdash.createLambdaFromCommand({
 This will parse `command` into an AST and extract the right information from the `lambda()` method and the collection name from the command.
 The query or aggregation will also be parsed and the variables extracted to become query parameters.
 
-Then, based on the information that was extracted, it will generate a Real function that will be turned into a webhook after doing all the
+Then, based on the information that was extracted, it will generate a Realm function that will be turned into a webhook after doing all the
 necessary Realm plumbing (App setup and HTTP and Atlas services creation).
 
 If `secret` is not specified, Lambdash will generate a random one to secure the endpoint.
@@ -79,7 +79,5 @@ await lambdash.createLambda('queryLambdaName', {
 This works similar as the above, except that all the parameters are passed expicitly and the AST is only generated for `queryOrAggregation`
 to extract the variables that will become query parameters when the query lambda is generated. **This method is less battle-tested than the one above.**
 
-####
-
-Credits:
+#### Credits:
  * **Icon: ** Lamb by Symbolon from the Noun Project
